@@ -10,6 +10,10 @@ public class Application {
 	public Application(CardTerminal reader) {
 		selectedReader = reader;
 	}
+	public void logComment(String comment) {
+		if (connection != null)
+			connection.logComment(comment, "=");
+	}
 	public void coldReset() throws ConnectionException {
 		try {
 			if (connection == null) {
@@ -44,12 +48,23 @@ public class Application {
 		}
 	}
 	public APDUResponse send(String cmdName, String header, String data, String le) throws ConnectionException {
-		return send(header, data, le);
+		try {
+			return unwrap(connection.send(cmdName, header, wrap(header, data, le), le));
+		} catch (CardException e) {
+			throw new ConnectionException("Card exception. " + e.getMessage(), e.getCause());
+		}
 	}
 	public String wrap(String header, String data, String le) throws ConnectionException {
 		return data;
 	}
 	public APDUResponse unwrap(APDUResponse response) throws ConnectionException {
 		return response;
+	}
+	protected APDUResponse rawSend(String cmdName, String header, String data, String le) throws ConnectionException {
+		try {
+			return connection.send(cmdName, header, data, le);
+		} catch (CardException e) {
+			throw new ConnectionException("Card exception. " + e.getMessage(), e.getCause());
+		}
 	}
 }

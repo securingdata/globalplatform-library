@@ -67,7 +67,7 @@ public class Connection {
 				ATR atr = card.getATR();
 				if (logListener != null) {
 					logListener.set("Connected to " + ct.getName() + "\n");
-					logListener.set("ATR: " + new StringHex(atr.getBytes()) + "\n\n");
+					logListener.set("With protocol " + card.getProtocol() + "\n\n");
 				}
 				return atr;
 			}
@@ -129,24 +129,35 @@ public class Connection {
 	private APDUResponse send(CommandAPDU command) throws CardException {
 		logBlock("Send: ", new StringHex(command.getBytes()));
 		APDUResponse response =  new APDUResponse(channel.transmit(command).getBytes());
-		logBlock("\nResp: ", new StringHex(response.toBytes()));
+		logBlock("Resp: ", new StringHex(response.toBytes()));
 		if (logListener != null)
 			logListener.set("\n");
 		return response;
 	}
-	public APDUResponse send(StringHex header, StringHex data, StringHex le) throws CardException {
+	public APDUResponse send(StringHex header, StringHex data) throws CardException {
 		byte[] bHeader = header.toBytes();
 		assert(bHeader.length == 4);
-		assert(le.size() == 1);
 		if (data == null)
-			return send(new CommandAPDU(bHeader[0], bHeader[1], bHeader[2], bHeader[3], le.toBytes()[0]));
+			return send(new CommandAPDU(bHeader[0], bHeader[1], bHeader[2], bHeader[3], 256));
 		else
-			return send(new CommandAPDU(bHeader[0], bHeader[1], bHeader[2], bHeader[3], data.toBytes(), le.toBytes()[0]));
+			return send(new CommandAPDU(bHeader[0], bHeader[1], bHeader[2], bHeader[3], data.toBytes(), 256));
 	}
 	public APDUResponse send(String header, String data, String le) throws CardException {
-		if (le.isEmpty())
-			le = "00";
-		return send(new StringHex(header), data.isEmpty() ? null : new StringHex(data), new StringHex(le));
+		return send(new StringHex(header), data.isEmpty() ? null : new StringHex(data));
+	}
+	public APDUResponse send(String cmdName, String header, String data, String le) throws CardException {
+		logComment(cmdName, "-");
+		return send(header, data, le);
+	}
+	public void logComment(String comment, String pattern) {
+		if (logListener != null) {
+			String tmp = "";
+			for (int i = 0; i < comment.length() + 2; i++)
+				tmp += pattern;
+			logListener.set(tmp + "\n");
+			logListener.set(" " + comment + "\n");
+			logListener.set(tmp + "\n");
+		}
 	}
 	public boolean isConnected() {
 		return channel != null;

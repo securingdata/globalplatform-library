@@ -11,7 +11,7 @@ import fr.securingdata.util.Crypto;
 import fr.securingdata.util.StringHex;
 
 public class SCP03 extends SCP {
-	private static final StringHex SIXTEEN_BYTES_NULL = new StringHex("00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00");
+	protected static final StringHex SIXTEEN_BYTES_NULL = new StringHex("00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00");
 	private static final byte CARD_CRYPTO_DERIVATION_CSTE = 0x00;
 	private static final byte HOST_CRYPTO_DERIVATION_CSTE = 0x01;
 	private static final byte SENC_DERIVATION_CSTE        = 0x04;
@@ -141,6 +141,10 @@ public class SCP03 extends SCP {
 			return new APDUResponse(dataToMac.toString());
 		}
 		return response;
+	}
+	@Override
+	public StringHex encrypt(StringHex data) throws GeneralSecurityException {
+		return Crypto.aesCBC(true, kDek, data, SIXTEEN_BYTES_NULL);
 	}
 	
 	private void incrementEncryptionCounter() {

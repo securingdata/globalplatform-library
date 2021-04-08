@@ -2,12 +2,16 @@ package fr.securingdata.globalplatform;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.Enumeration;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
+import javax.crypto.spec.SecretKeySpec;
+
 import fr.securingdata.connection.APDUResponse;
 import fr.securingdata.connection.ConnectionException;
+import fr.securingdata.util.Crypto;
 import fr.securingdata.util.StringHex;
 import fr.securingdata.util.TLV;
 
@@ -17,6 +21,7 @@ public class GPCommands {
 	public static final String INS_DELETE  = "E4";
 	public static final String INS_INSTALL = "E6";
 	public static final String INS_LOAD    = "E8";
+	public static final String INS_PUT_KEY = "D8";
 	
 	public static final String P1_INSTALL_FOR_LOAD            = "02";
 	public static final String P1_INSTALL_FOR_INSTALL         = "04";
@@ -85,12 +90,10 @@ public class GPCommands {
 	public APDUResponse delete(String aid, boolean related) throws ConnectionException {
 		return scp.send("Delete", SECURE_CLA + INS_DELETE + "00" + (related ? "80" : "00"), TLV.createTLV(new StringHex("4F"), new StringHex(aid)).toString(), "00");
 	}
-	
 	public APDUResponse installForLoad(String pckgAID, String sdAid) throws ConnectionException {
-		String hash = "";
-		String loadParam = "";
-		String token = "";
-		
+		return installForLoad(pckgAID, sdAid, "", "", "");
+	}
+	public APDUResponse installForLoad(String pckgAID, String sdAid, String hash, String loadParam, String token) throws ConnectionException {
 		StringHex shPckgAID = new StringHex(pckgAID);
 		StringHex shSdAid = new StringHex(sdAid);
 		StringHex shHash = new StringHex(hash);
@@ -98,11 +101,11 @@ public class GPCommands {
 		StringHex shToken = new StringHex(token);
 		
 		return scp.send("Install For Load", SECURE_CLA + INS_INSTALL + P1_INSTALL_FOR_LOAD + "00", 
-				StringHex.byteToHex((byte)shPckgAID.size()) + shPckgAID.toString() +
-				StringHex.byteToHex((byte)shSdAid.size()) + shSdAid.toString() + 
-				StringHex.byteToHex((byte)shHash.size()) + shHash.toString() + 
-				StringHex.byteToHex((byte)shLoadParam.size()) + shLoadParam.toString() + 
-				StringHex.byteToHex((byte)shToken.size()) + shToken.toString(), "00");
+				TLV.createLV(shPckgAID).toString() +
+				TLV.createLV(shSdAid).toString() + 
+				TLV.createLV(shHash).toString() + 
+				TLV.createLV(shLoadParam).toString() + 
+				TLV.createLV(shToken).toString(), "00");
 	}
 	
 	public APDUResponse installForInstallAndMakeSelectable(String loadFileAID, String moduleAID, String appAID, String privileges, String parameters) throws ConnectionException {
@@ -119,7 +122,8 @@ public class GPCommands {
 				StringHex.byteToHex((byte)shModuleAID.size()) + shModuleAID.toString() + 
 				StringHex.byteToHex((byte)shAppAID.size()) + shAppAID.toString() + 
 				StringHex.byteToHex((byte)shPrivileges.size()) + shPrivileges.toString() + 
-				StringHex.byteToHex((byte)shParameters.size()) + shParameters.toString(), "00");
+				StringHex.byteToHex((byte)shParameters.size()) + shParameters.toString() +
+				"00", "00");
 	}
 	
 	public APDUResponse load(boolean lastBlock, byte blockNumber, String block) throws ConnectionException {
@@ -127,6 +131,64 @@ public class GPCommands {
 	}
 	public APDUResponse getData(String tag) throws ConnectionException {
 		String cla = scp.secLevel != 0 ? SECURE_CLA : "00";
-		return scp.send(cla + "CA" + tag, "", "");
+		return scp.send("Get Data", cla + "CA" + tag, "", "");
+	}
+	public APDUResponse storeData(String data) throws ConnectionException {
+		return scp.send("Store Data", SECURE_CLA + "E2 9000", data, "");
+	}
+	
+	public APDUResponse putDESKeys(boolean create, StringHex kenc, StringHex kmac, StringHex kdek) throws ConnectionException, GeneralSecurityException {
+		StringHex checkData = SCP02.EIGHT_BYTES_NULL;
+		String header = SECURE_CLA + INS_PUT_KEY + (create ? "00" : "20") + "81";
+		String data = "20";
+		
+		//kenc
+		String encryptedKey = scp.encrypt(kenc).toString();
+		String checksum = SCP02.encrypt(kenc, checkData).get(0, 3).toString();
+		data += "80 10 " + encryptedKey + " 03 " + checksum;
+		
+		//kmac
+		encryptedKey = scp.encrypt(kmac).toString();
+		checksum = SCP02.encrypt(kmac, checkData).get(0, 3).toString();
+		data += "80 10 " + encryptedKey + " 03 " + checksum;
+		
+		//kdek
+		encryptedKey = scp.encrypt(kdek).toString();
+		checksum = SCP02.encrypt(kdek, checkData).get(0, 3).toString();
+		data += "80 10 " + encryptedKey + " 03 " + checksum;
+		
+		return scp.send("Put Key DES (" + (create ? "Create)" : "Update)"), header, data, "");
+	}
+	public APDUResponse putAESKeys(boolean create, StringHex kenc, StringHex kmac, StringHex kdek) throws ConnectionException, GeneralSecurityException {
+		StringHex checkData = new StringHex("01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01");
+		String header = SECURE_CLA + INS_PUT_KEY + (create ? "00" : "30") + "81";
+		String data = "30";
+		
+		//kenc
+		String encryptedKey = scp.encrypt(kenc).toString();
+		String checksum = Crypto.aes(new SecretKeySpec(kenc.toBytes(), "AES"), checkData).get(0, 3).toString();
+		data += "88 10 " + encryptedKey + " 03 " + checksum;
+		
+		//kmac
+		encryptedKey = scp.encrypt(kmac).toString();
+		checksum = Crypto.aes(new SecretKeySpec(kmac.toBytes(), "AES"), checkData).get(0, 3).toString();
+		data += "88 10 " + encryptedKey + " 03 " + checksum;
+		
+		//kdek
+		encryptedKey = scp.encrypt(kdek).toString();
+		checksum = Crypto.aes(new SecretKeySpec(kdek.toBytes(), "AES"), checkData).get(0, 3).toString();
+		data += "88 10 " + encryptedKey + " 03 " + checksum;
+		
+		return scp.send("Put Key AES (" + (create ? "Create)" : "Update)"), header, data, "");
+	}
+	public APDUResponse putTokenKey(boolean create, StringHex pub) throws ConnectionException, GeneralSecurityException {
+		String header = SECURE_CLA + INS_PUT_KEY + (create ? "00" : "70") + "01";
+		String data = "70";
+		
+		data += TLV.createTLV(new StringHex("B0"), pub).toString();
+		//data += "F0 01 02";//Key Parameter Reference P-521
+		data += "00";//No key check
+		
+		return scp.send("Put Key ECC (" + (create ? "Create)" : "Update)"), header, data, "");
 	}
 }

@@ -13,7 +13,7 @@ import fr.securingdata.util.Crypto;
 import fr.securingdata.util.StringHex;
 
 public class SCP02 extends SCP {
-	private static final StringHex EIGHT_BYTES_NULL = new StringHex("00 00 00 00 00 00 00 00");
+	protected static final StringHex EIGHT_BYTES_NULL = new StringHex("00 00 00 00 00 00 00 00");
 	
 	protected static final byte THREE_SCP_KEYS           = BIT1;
 	protected static final byte CMAC_ON_UNMODIFIED_APDU  = BIT2;
@@ -113,5 +113,18 @@ public class SCP02 extends SCP {
 	@Override
 	public APDUResponse unwrap(APDUResponse response) throws GPException {
 		return response;
+	}
+	@Override
+	public StringHex encrypt(StringHex data) throws GeneralSecurityException {
+		return encrypt(kDek, data);
+	}
+	
+	protected static StringHex encrypt(StringHex key, StringHex data) throws GeneralSecurityException {
+		return encrypt(convertInTDES(key), data);
+	}
+	private static StringHex encrypt(Key key, StringHex data) throws GeneralSecurityException {
+		Cipher cipher = Cipher.getInstance("DESede/ECB/NoPadding");
+		cipher.init(Cipher.ENCRYPT_MODE, key);
+		return new StringHex(cipher.doFinal(data.toBytes()));
 	}
 }

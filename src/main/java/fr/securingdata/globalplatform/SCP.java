@@ -22,6 +22,22 @@ public abstract class SCP extends Application implements Bits {
 	public enum StaticDerivation {
 		NO_DERIVATION, EMVCPS1_1, VISA, VISA2;
 	}
+	public enum KeyName {
+		DEFAULT_KENC((short) 1),
+		DEFAULT_KMAC((short) 2),
+		DEFAULT_KDEK((short) 3),
+		SCP02_KENC((short) 0x2001),
+		SCP02_KMAC((short) 0x2002),
+		SCP02_KDEK((short) 0x2003),
+		SCP03_KENC((short) 0x3001),
+		SCP03_KMAC((short) 0x3002),
+		SCP03_KDEK((short) 0x3003);
+		
+		public final short kvnAndKid;
+		private KeyName(short kvnAndKid) {
+			this.kvnAndKid = kvnAndKid;
+		}
+	}
 	
 	public static final byte SEC_LEVEL_NO       = ZERO;
 	public static final byte SEC_LEVEL_C_MAC    = BIT1;
@@ -30,6 +46,8 @@ public abstract class SCP extends Application implements Bits {
 	public static final byte SEC_LEVEL_R_ENC    = BIT6;
 	public static final byte SEC_LEVEL_ANY_AUTH = BIT7;
 	public static final byte SEC_LEVEL_AUTH     = BIT8;
+	
+	public static final String DEFAULT_KENC = "DEFAULT_KENC";
 	
 	protected static final int KEY_DIV_DATA_LEN = 10;
 	protected              int KEY_INFO_LEN;
@@ -70,14 +88,19 @@ public abstract class SCP extends Application implements Bits {
 		hostChallenge = new StringHex(tmp);
 	}
 	
+	public void coldReset() throws ConnectionException {
+		super.coldReset();
+		secLevel = SEC_LEVEL_NO;
+		macChaining = null;
+	}
 	public void setImplementationOption(byte implementation) {
 		this.implementation = implementation;
 	}
 	public void setStaticDerivation(StaticDerivation staticDerivation) {
 		this.staticDerivation = staticDerivation;
 	}
-	public void addKey(short kvnAndKid, Key key) {
-		keySet.put(kvnAndKid, key);
+	public void addKey(KeyName keyName, Key key) {
+		keySet.put(keyName.kvnAndKid, key);
 	}
 	
 	@Deprecated
@@ -104,10 +127,10 @@ public abstract class SCP extends Application implements Bits {
 		return instanciateKey(key.toBytes());
 	}
 	public abstract Key instanciateKey(byte[] keyValue);
-	protected Key convertInTDES(Key k) {
+	protected static Key convertInTDES(Key k) {
 		return convertInTDES(new StringHex(k.getEncoded()));
 	}
-	protected Key convertInTDES(StringHex des2) {
+	protected static Key convertInTDES(StringHex des2) {
 		if (des2.size() == 16)
 			des2 = StringHex.concatenate(des2, des2.get(0, 8));
 		return new SecretKeySpec(des2.toBytes(), "DESede");
@@ -140,24 +163,24 @@ public abstract class SCP extends Application implements Bits {
 		try {
 			switch(staticDerivation) {
 				case NO_DERIVATION:
-					setSessionKey(SENC_NAME, getKey(currentKeys).getEncoded());
-					setSessionKey(SMAC_NAME, getKey((short) (currentKeys + 1)).getEncoded());
-					setSessionKey(KDEK_NAME, getKey((short) (currentKeys + 2)).getEncoded());
+					setSessionKey(SENC_NAME, getKey((short) (currentKeys + 1)).getEncoded());
+					setSessionKey(SMAC_NAME, getKey((short) (currentKeys + 2)).getEncoded());
+					setSessionKey(KDEK_NAME, getKey((short) (currentKeys + 3)).getEncoded());
 					return;
 				case EMVCPS1_1:
 					kdd = StringHex.concatenate(keyDivData.get(4, 6), new StringHex("F0 01"), 
 												keyDivData.get(4, 6), new StringHex("0F 01"));
 					cipher = Cipher.getInstance("DESede/ECB/NoPadding");
 					
-					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey(currentKeys)));
+					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 1))));
 					setSessionKey(SENC_NAME, cipher.doFinal(kdd.toBytes()));
 
-					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 1))));
+					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 2))));
 					kdd.set(7, (byte) 0x02);
 					kdd.set(15, (byte) 0x02);
 					setSessionKey(SMAC_NAME, cipher.doFinal(kdd.toBytes()));
 					
-					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 2))));
+					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 3))));
 					kdd.set(7, (byte) 0x03);
 					kdd.set(15, (byte) 0x03);
 					setSessionKey(KDEK_NAME, cipher.doFinal(kdd.toBytes()));
@@ -166,17 +189,17 @@ public abstract class SCP extends Application implements Bits {
 					cipher = Cipher.getInstance("DESede/ECB/NoPadding");
 					kdd = keyDivData.get(2, 8);
 					
-					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey(currentKeys)));
+					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 1))));
 					StringHex left = new StringHex("FF FF");
 					StringHex right = new StringHex("01 00 00 00 00 00");
 					setSessionKey(SENC_NAME, cipher.doFinal(StringHex.concatenate(left, kdd, right).toBytes()));
 					
-					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 1))));
+					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 2))));
 					left = new StringHex("00 00");
 					right = new StringHex("02 00 00 00 00 00");
 					setSessionKey(SMAC_NAME, cipher.doFinal(StringHex.concatenate(left, kdd, right).toBytes()));
 					
-					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 2))));
+					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 3))));
 					left = new StringHex("F0 F0");
 					right = new StringHex("03 00 00 00 00 00");
 					setSessionKey(KDEK_NAME, cipher.doFinal(StringHex.concatenate(left, kdd, right).toBytes()));
@@ -186,15 +209,15 @@ public abstract class SCP extends Application implements Bits {
 												keyDivData.get(0, 2), keyDivData.get(4, 4), new StringHex("0F 01"));
 					cipher = Cipher.getInstance("DESede/ECB/NoPadding");
 					
-					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey(currentKeys)));
+					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 1))));
 					setSessionKey(SENC_NAME, cipher.doFinal(kdd.toBytes()));
 					
-					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 1))));
+					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 2))));
 					kdd.set(7, (byte) 0x02);
 					kdd.set(15, (byte) 0x02);
 					setSessionKey(SMAC_NAME, cipher.doFinal(kdd.toBytes()));
 					
-					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 2))));
+					cipher.init(Cipher.ENCRYPT_MODE, convertInTDES(getKey((short) (currentKeys + 3))));
 					kdd.set(7, (byte) 0x03);
 					kdd.set(15, (byte) 0x03);
 					setSessionKey(KDEK_NAME, cipher.doFinal(kdd.toBytes()));
@@ -208,6 +231,7 @@ public abstract class SCP extends Application implements Bits {
 	public abstract void computeCryptograms() throws GPException;
 	public abstract String wrap(String header, String data, String le) throws GPException;
 	public abstract APDUResponse unwrap(APDUResponse response) throws GPException;
+	public abstract StringHex encrypt(StringHex data) throws GeneralSecurityException;
 	
 	public APDUResponse initUpdate(byte kvn, byte kid) throws ConnectionException {
 		assert(hostChallenge.size() == 8);
@@ -232,6 +256,9 @@ public abstract class SCP extends Application implements Bits {
 		return response;
 	}
 	public APDUResponse externalAuth(byte secLevel) throws ConnectionException {
+		return externalAuth(secLevel, true);
+	}
+	public APDUResponse externalAuth(byte secLevel, boolean exceptionOnFail) throws ConnectionException {
 		this.secLevel = (byte) (SEC_LEVEL_AUTH | SEC_LEVEL_C_MAC);//Hack to force a correct wrapping
 		APDUResponse response = send("External Authenticate", "84 82 " + StringHex.byteToHex(secLevel) + " 00", hostCrypto.toString(), "00");
 		if ((response.getStatusWord() & 0xFFFF) == 0x9000) {
@@ -239,7 +266,8 @@ public abstract class SCP extends Application implements Bits {
 		}
 		else {
 			this.secLevel = SEC_LEVEL_NO;
-			throw new GPException(Integer.toHexString(response.getStatusWord()) + " obtained instead of 9000 in External Authenticate command");
+			if (exceptionOnFail)
+				throw new GPException(Integer.toHexString(response.getStatusWord()) + " obtained instead of 9000 in External Authenticate command");
 		}
 		
 		return response;

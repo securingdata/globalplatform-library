@@ -4,7 +4,8 @@ import javax.smartcardio.CardException;
 import javax.smartcardio.CardTerminal;
 
 public class Application {
-	private CardTerminal selectedReader;
+	private String selectedAid;
+	protected CardTerminal selectedReader;
 	protected Connection connection;
 	
 	public Application(CardTerminal reader) {
@@ -24,6 +25,7 @@ public class Application {
 					connection.connectAuto();
 			}
 			connection.coldReset();
+			selectedAid = null;
 		} catch (CardException e) {
 			throw new ConnectionException("Card exception. " + e.getMessage(), e.getCause());
 		}
@@ -37,8 +39,14 @@ public class Application {
 			}
 		}
 	}
+	public String getSelectedAid() {
+		return selectedAid;
+	}
 	public APDUResponse select(String aid) throws ConnectionException {
-		return send("Select", "00 A4 04 00", aid, "00");
+		APDUResponse resp = send("Select", "00 A4 04 00", aid, "00");
+		if (resp.getStatusWord() == (short) 0x9000)
+			selectedAid = aid;
+		return resp;
 	}
 	public APDUResponse send(String header, String data, String le) throws ConnectionException {
 		try {

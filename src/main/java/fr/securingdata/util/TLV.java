@@ -2,9 +2,12 @@ package fr.securingdata.util;
 
 public class TLV {
 	
+	public static StringHex createLV(String data) {
+		return createLV(new StringHex(data));
+	}
 	public static StringHex createLV(StringHex data) {
 		String len;
-		if (data.size() <= 0x7F) {
+		if (data.size() < 0x80) {
 			len = StringHex.byteToHex((byte) data.size());
 		}
 		else if (data.size() <= 0xFF) {
@@ -18,6 +21,10 @@ public class TLV {
 			return null;
 		}
 		return StringHex.concatenate(new StringHex(len), data);
+	}
+	
+	public static StringHex createTLV(String tag, String data) {
+		return createTLV(new StringHex(tag), new StringHex(data));
 	}
 	public static StringHex createTLV(StringHex tag, StringHex data) {
 		return StringHex.concatenate(tag, createLV(data));

@@ -88,42 +88,41 @@ public class GPCommands {
 	}
 
 	public APDUResponse delete(String aid, boolean related) throws ConnectionException {
-		return scp.send("Delete", SECURE_CLA + INS_DELETE + "00" + (related ? "80" : "00"), TLV.createTLV(new StringHex("4F"), new StringHex(aid)).toString(), "00");
+		return delete(aid, related, null);
+	}
+	public APDUResponse delete(String aid, boolean related, String token) throws ConnectionException {
+		String data = TLV.createTLV("4F", aid).toString();
+		if (token != null && !token.isEmpty()) {
+			data += TLV.createTLV("9E", token);
+		}
+		return scp.send("Delete", SECURE_CLA + INS_DELETE + "00" + (related ? "80" : "00"), data, "00");
 	}
 	public APDUResponse installForLoad(String pckgAID, String sdAid) throws ConnectionException {
 		return installForLoad(pckgAID, sdAid, "", "", "");
 	}
 	public APDUResponse installForLoad(String pckgAID, String sdAid, String hash, String loadParam, String token) throws ConnectionException {
-		StringHex shPckgAID = new StringHex(pckgAID);
-		StringHex shSdAid = new StringHex(sdAid);
-		StringHex shHash = new StringHex(hash);
-		StringHex shLoadParam = new StringHex(loadParam);
-		StringHex shToken = new StringHex(token);
-		
 		return scp.send("Install For Load", SECURE_CLA + INS_INSTALL + P1_INSTALL_FOR_LOAD + "00", 
-				TLV.createLV(shPckgAID).toString() +
-				TLV.createLV(shSdAid).toString() + 
-				TLV.createLV(shHash).toString() + 
-				TLV.createLV(shLoadParam).toString() + 
-				TLV.createLV(shToken).toString(), "00");
+				TLV.createLV(pckgAID).toString() +
+				TLV.createLV(sdAid).toString() + 
+				TLV.createLV(hash).toString() + 
+				TLV.createLV(loadParam).toString() + 
+				TLV.createLV(token).toString(), "00");
 	}
 	
-	public APDUResponse installForInstallAndMakeSelectable(String loadFileAID, String moduleAID, String appAID, String privileges, String parameters) throws ConnectionException {
-		StringHex shLoadFileAID = new StringHex(loadFileAID);
-		StringHex shModuleAID = new StringHex(moduleAID);
-		StringHex shAppAID = new StringHex(appAID);
-		StringHex shPrivileges = new StringHex((privileges == null || privileges.isEmpty()) ? "00" : privileges);
-		StringHex shParameters = new StringHex((parameters == null || parameters.isEmpty()) ? "C9 01 00" : parameters);
-		
+	public APDUResponse installForInstallAndMakeSelectable(String loadFileAID, String moduleAID, String appAID, String privileges, String parameters, String token) throws ConnectionException {
+		if (privileges == null || privileges.isEmpty())
+			privileges = "00";
+		if (parameters == null || parameters.isEmpty())
+			parameters = "C9 01 00";
 		String p1 = new StringHex(P1_INSTALL_FOR_INSTALL).xor(new StringHex(P1_INSTALL_FOR_MAKE_SELECTABLE)).toString();
 		
 		return scp.send("Install For Install And Make Selectable", SECURE_CLA + INS_INSTALL + p1 + "00", 
-				StringHex.byteToHex((byte)shLoadFileAID.size()) + shLoadFileAID.toString() +
-				StringHex.byteToHex((byte)shModuleAID.size()) + shModuleAID.toString() + 
-				StringHex.byteToHex((byte)shAppAID.size()) + shAppAID.toString() + 
-				StringHex.byteToHex((byte)shPrivileges.size()) + shPrivileges.toString() + 
-				StringHex.byteToHex((byte)shParameters.size()) + shParameters.toString() +
-				"00", "00");
+				TLV.createLV(loadFileAID).toString() +
+				TLV.createLV(moduleAID).toString() +
+				TLV.createLV(appAID).toString() +
+				TLV.createLV(privileges).toString() +
+				TLV.createLV(parameters).toString() +
+				TLV.createLV(token), "00");
 	}
 	
 	public APDUResponse load(boolean lastBlock, byte blockNumber, String block) throws ConnectionException {
@@ -180,6 +179,27 @@ public class GPCommands {
 		data += "88 10 " + encryptedKey + " 03 " + checksum;
 		
 		return scp.send("Put Key AES (" + (create ? "Create)" : "Update)"), header, data, "");
+	}
+	public APDUResponse putAESReceiptKey(StringHex key) throws ConnectionException, GeneralSecurityException {
+		StringHex checkData = new StringHex("01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01");
+		String header = SECURE_CLA + INS_PUT_KEY + "0001";
+		String data = "71";
+		
+		String encryptedKey = scp.encrypt(key).toString();
+		String checksum = Crypto.aes(new SecretKeySpec(key.toBytes(), "AES"), checkData).get(0, 3).toString();
+		data += "88 10 " + encryptedKey + " 03 " + checksum;
+		
+		return scp.send("Put AES Receipt Key", header, data, "");
+	}
+	public APDUResponse putRSATokenKey(StringHex modulus, StringHex exponent) throws ConnectionException {
+		String header = SECURE_CLA + INS_PUT_KEY + "0001";
+		String data = "70";
+		
+		data += TLV.createTLV(new StringHex("A1"), modulus).toString();
+		data += TLV.createTLV(new StringHex("A0"), exponent).toString();
+		data += "00";//No key check
+		
+		return scp.send("Put RSA Token Key", header, data, "");
 	}
 	public APDUResponse putTokenKey(boolean create, StringHex pub) throws ConnectionException, GeneralSecurityException {
 		String header = SECURE_CLA + INS_PUT_KEY + (create ? "00" : "70") + "01";

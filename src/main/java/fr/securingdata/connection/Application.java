@@ -1,5 +1,6 @@
 package fr.securingdata.connection;
 
+import javax.smartcardio.ATR;
 import javax.smartcardio.CardException;
 import javax.smartcardio.CardTerminal;
 
@@ -18,11 +19,14 @@ public class Application {
 	public void coldReset() throws ConnectionException {
 		try {
 			if (connection == null) {
+				ATR atr = null;
 				connection = Connection.getConnection();
 				if (selectedReader != null)
-					connection.contectAutoToReader(selectedReader);
+					atr = connection.contectAutoToReader(selectedReader);
 				else
-					connection.connectAuto();
+					atr = connection.connectAuto();
+				if (atr == null)
+					throw new ConnectionException("No card present.");
 			}
 			connection.coldReset();
 			selectedAid = null;

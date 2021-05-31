@@ -144,7 +144,7 @@ public class SCP03 extends SCP {
 	}
 	@Override
 	public StringHex encrypt(StringHex data) throws GeneralSecurityException {
-		return Crypto.aesCBC(true, kDek, data, SIXTEEN_BYTES_NULL);
+		return Crypto.aesCBCNoPad(true, kDek, data, SIXTEEN_BYTES_NULL);
 	}
 	
 	private void incrementEncryptionCounter() {

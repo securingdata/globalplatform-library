@@ -59,6 +59,14 @@ public class Crypto {
 		
 		return result;
 	}
+	public static StringHex aesCBCNoPad(boolean encrypting, Key key, StringHex msg, StringHex iv) throws GeneralSecurityException {
+		byte[] res = new byte[msg.size()];
+		BufferedBlockCipher cipher = new BufferedBlockCipher(new CBCBlockCipher(new AESEngine()));
+		cipher.init(encrypting, new ParametersWithIV(new KeyParameter(key.getEncoded()), iv.toBytes()));
+		cipher.processBytes(msg.toBytes(), 0, msg.size(), res, 0);
+		
+		return new StringHex(res);
+	}
 	public static StringHex aesCMAC(Key key, StringHex msg, StringHex iv) throws GeneralSecurityException {
 		if (iv != null)
 			msg = StringHex.concatenate(iv, msg);

@@ -92,6 +92,7 @@ public abstract class SCP extends Application implements Bits {
 		super.coldReset();
 		secLevel = SEC_LEVEL_NO;
 		macChaining = null;
+		derivationData = null;
 	}
 	public void setImplementationOption(byte implementation) {
 		this.implementation = implementation;

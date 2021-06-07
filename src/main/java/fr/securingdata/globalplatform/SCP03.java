@@ -7,6 +7,7 @@ import javax.crypto.spec.SecretKeySpec;
 import javax.smartcardio.CardTerminal;
 
 import fr.securingdata.connection.APDUResponse;
+import fr.securingdata.connection.ConnectionException;
 import fr.securingdata.util.Crypto;
 import fr.securingdata.util.StringHex;
 
@@ -26,6 +27,10 @@ public class SCP03 extends SCP {
 		encryptionCounter = new byte[16];
 	}
 	
+	public void coldReset() throws ConnectionException {
+		super.coldReset();
+		encryptionCounter = new byte[16];
+	}
 	
 	public String getCipherName() {
 		return "AES/CBC/NoPadding";

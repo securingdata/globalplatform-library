@@ -54,14 +54,18 @@ public class SCP03 extends SCP {
 		}
 	}
 	public void computeCryptograms() throws GPException {
+		StringHex computedCardCrypto;
 		try {
 			computeDerivationScheme(CARD_CRYPTO_DERIVATION_CSTE);
-			hostCrypto = Crypto.aesCMAC(sMac, derivationData, null).get(0, 8);
+			computedCardCrypto = Crypto.aesCMAC(sMac, derivationData, null).get(0, 8);
 			
 			computeDerivationScheme(HOST_CRYPTO_DERIVATION_CSTE);
 			hostCrypto = Crypto.aesCMAC(sMac, derivationData, null).get(0, 8);
 		} catch (GeneralSecurityException e) {
 			throw new GPException("Crypto exception. " + e.getMessage(), e.getCause());
+		}
+		if (!cardCrypto.equals(computedCardCrypto)) {
+			throw new GPException("Computed card cryptogram mistmatches with received one.");
 		}
 	}
 	

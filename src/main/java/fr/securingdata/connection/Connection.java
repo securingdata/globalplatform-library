@@ -1,5 +1,7 @@
 package fr.securingdata.connection;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.List;
 
 import javax.smartcardio.ATR;
@@ -10,8 +12,8 @@ import javax.smartcardio.CardTerminal;
 import javax.smartcardio.CommandAPDU;
 import javax.smartcardio.TerminalFactory;
 
-import javafx.beans.property.StringProperty;
 import fr.securingdata.util.StringHex;
+import javafx.beans.property.StringProperty;
 
 public class Connection {
 	private static StringProperty logListener;
@@ -37,6 +39,25 @@ public class Connection {
 	private CardChannel channel;
 	
 	private Connection() {
+		if (System.getProperty("os.name").equals("Linux")) {//Workaround for bug in Linux to have a correct path for libpcsclite
+			try {
+				String line;
+				String comm[] = { "find", "/usr", "/lib", "-name",
+				"libpcsclite.so.1" };
+				Process p = Runtime.getRuntime().exec(comm);
+
+				BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+
+				while ((line = reader.readLine()) != null && !line.equals("")) {
+					if (line.contains("libpcsclite.so.1")) {
+						System.setProperty("sun.security.smartcardio.library",line);
+						break;
+					}
+				}
+				p.destroy();
+			} catch (Exception e) {}
+		}
+		
 		terminalFactory = TerminalFactory.getDefault();
 	}
 	
@@ -52,6 +73,7 @@ public class Connection {
 	}
 	
 	public static List<CardTerminal> getTerminals() {
+		getConnection();//Force create Connection singleton to ensure bug workaround on Linux
 		try {
 			return TerminalFactory.getDefault().terminals().list();
 		} catch (CardException e) {
